@@ -4,8 +4,6 @@
 
 #include "shell.h"
 
-#define BUFMAX 4096
-
 static void    sig_int(int);        /* our signal-catching function */
 
 int main(void)

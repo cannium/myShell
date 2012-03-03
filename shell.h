@@ -8,5 +8,7 @@
 
 #include    "error.h"
 
+#define BUFMAX 4096
+
 
 #endif /* SHELL_H */
