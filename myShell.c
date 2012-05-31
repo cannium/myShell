@@ -12,23 +12,21 @@
 
 static void parentInterruptionHandler(int);
 static void childInterruptionHandler(int);
+static void sigchildHandler(int);
 static void printPrompt();
 static int runBuiltInCommand(char *command[]);
+static void setSignalHandler();
 
+// hash table, if pid is a background job, 
+// record it by set backgroundJob[pid] = 1
+int backgroundJob[MAX_BACKGROUND_JOB] = {0};
 
-// TODO sigchild for backgroundJob
-//		do cleanup because of malloc
 
 int main(void)
 {
     char buffer[BUFFER_SIZE];
 
-	// hash table, if pid is a background job, 
-	// record it by set backgroundJob[pid] = 1
-	int backgroundJob[MAX_BACKGROUND_JOB] = {0};
-
-    if (signal(SIGINT, parentInterruptionHandler) == SIG_ERR)
-        printErrorAndQuit("signal error");
+	setSignalHandler();
 
 	printf("welcome, %s!\n", getlogin());
 
@@ -78,6 +76,9 @@ int main(void)
 
 			else if(pid == 0)
 			{   /* child */
+				if (signal(SIGINT, childInterruptionHandler) == SIG_ERR)
+					printErrorAndQuit("signal error");
+
 				if(outputRedirectionFilename[0] != 0)
 				{
 					int outfd;
@@ -106,13 +107,25 @@ int main(void)
 
 			/* parent */
 			if(isBackground)
+			{
 				backgroundJob[pid] = 1;
+				printf("%s [%d]\n", pid, arguments[0]);
+			}
 			else
 			{
 				int status;	
 				if( (pid = waitpid(pid, &status, 0)) < 0)
 					printErrorAndQuit("waitpid error");
 			}
+		}
+
+		// cleanup because of malloc in parser
+		char **p = arguments;
+		while( *p != NULL)
+		{
+			free(*p);
+			*p = NULL;
+			p++;
 		}
     }
     exit(0);
@@ -129,6 +142,17 @@ void childInterruptionHandler(int signo)
 {
 	printf("\ninterrupted\n");
 	exit(0);
+}
+
+void sigchildHandler(int signo)
+{
+	pid_t pid;
+	int status;
+	while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
+	{
+		backgroundJob[pid] = 0;
+		printf("[%d] done\n", pid);
+	}
 }
 
 void printPrompt()
@@ -195,4 +219,13 @@ int runBuiltInCommand(char **command)
 		return FALSE;
 
 	return TRUE;
+}
+
+void setSignalHandler()
+{
+	if( signal(SIGINT, parentInterruptionHandler) == SIG_ERR)
+		printErrorAndQuit("signal error");
+
+	if( signal(SIGCHLD, sigchildHandler) == SIG_ERR)
+		printErrorAndQuit("signal error");
 }
