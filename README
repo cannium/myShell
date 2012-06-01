@@ -1,0 +1,52 @@
+myshell
+----------
+
+Myshell is a simple but usable shell implementation, written by can.
+
+If you encounter any problems while using it, please contact can@canx.me
+
+
+quick start
+----------
+
+to build, run:
+
+	$ make
+
+to use it, run:
+
+	$ ./myshell
+
+to quit the shell, run:
+
+	$ exit
+
+
+some details
+----------
+
+1. You can use "export name=value" to change environment variables, 
+	to show them, use "echo name".
+	Especially, you can use "export $PE=style" to change the prompt style.
+	And the style supports 3 special characters:
+		\u		current user
+		\w		current working directory
+		\h		host name of the computer
+	For example, when setting:
+		$ export $PE=\u@\h:\w>
+	you will get a prompt like this:
+		can@cans-macbook.local:/Users/can/github/myShell>
+
+2. You can add a "&" at the end of a command line,
+	to make it run in the background. For example,
+		$ ./test/while1 &
+	But "&" can not appear in the middle of a command line, like:
+		$ ls & -a -l
+	You should change this to:
+		$ ls -a -l &
+
+3. You can use "<" or ">" to make input or output redirections,
+	for example,
+		$ ./test/echo < echo.c > echoout.txt
+	"<" and ">" can only appear once in a command
+

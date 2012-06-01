@@ -14,7 +14,7 @@ static void parentInterruptionHandler(int);
 static void childInterruptionHandler(int);
 static void sigchildHandler(int);
 static void printPrompt();
-static int runBuiltInCommand(char *command[]);
+static int runBuiltinCommand(char *command[]);
 static void setSignalHandler();
 
 // hash table, if pid is a background job, 
@@ -68,7 +68,7 @@ int main(void)
 			printf("\n");
 		}
 
-		if( !runBuiltInCommand(arguments))
+		if( !runBuiltinCommand(arguments))
 		{
 			pid_t pid;
 			if( (pid = fork()) < 0)
@@ -76,9 +76,19 @@ int main(void)
 
 			else if(pid == 0)
 			{   /* child */
-				if (signal(SIGINT, childInterruptionHandler) == SIG_ERR)
-					printErrorAndQuit("signal error");
+				if(isBackground)
+				{
+					// ignore interruption if run in background
+					if (signal(SIGINT, SIG_IGN) == SIG_ERR)
+						printErrorAndQuit("signal error");
+				}
+				else
+				{					
+					if (signal(SIGINT, childInterruptionHandler) == SIG_ERR)
+						printErrorAndQuit("signal error");
+				}
 
+				// if output redirection exists:
 				if(outputRedirectionFilename[0] != 0)
 				{
 					int outfd;
@@ -89,7 +99,9 @@ int main(void)
 						exit(-1);
 					}
 					dup2(outfd, fileno(stdout));
+					close(outfd);
 				}
+				// if input redirection exists:
 				if(inputRedirectionFilename[0] != 0)
 				{
 					int infd;
@@ -100,6 +112,7 @@ int main(void)
 						exit(-1);
 					}
 					dup2(infd, fileno(stdin));
+					close(infd);
 				}
 				execvp(arguments[0], arguments);
 				printErrorAndQuit("couldn't execute");
@@ -109,7 +122,7 @@ int main(void)
 			if(isBackground)
 			{
 				backgroundJob[pid] = 1;
-				printf("%s [%d]\n", pid, arguments[0]);
+				printf("%s [%d]\n", arguments[0], pid);
 			}
 			else
 			{
@@ -135,7 +148,6 @@ void parentInterruptionHandler(int signo)
 {
 	printf("\n");
 	printPrompt();
-	fflush(NULL);
 }
 
 void childInterruptionHandler(int signo)
@@ -148,14 +160,28 @@ void sigchildHandler(int signo)
 {
 	pid_t pid;
 	int status;
-	while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
+	int i;
+
+	// check if background job ends and waitpid() for it
+	for(i = 0; i < MAX_BACKGROUND_JOB; i++)
 	{
-		backgroundJob[pid] = 0;
-		printf("[%d] done\n", pid);
+		if(backgroundJob[i])
+		{
+			if(i == (waitpid(i, &status, WNOHANG)))
+			{
+				backgroundJob[i] = 0;
+				printf("[%d] done\n", i);
+			}
+		}
+
 	}
 }
 
 void printPrompt()
+/*
+ *	print prompt according to environment variable $PE
+ *	if $PE not exists, print default prompt "%"
+ */
 {
 	char *promptEnvironment = getenv("$PE");
 	if( promptEnvironment == NULL)
@@ -172,13 +198,16 @@ void printPrompt()
 				switch(promptEnvironment[++i])
 				{
 					case 'u':
+						// if \u appears, print current user name
 						printf("%s", getlogin());
 						break;
 					case 'w':
+						// if \w appears, print current working directory
 						getcwd(buffer, BUFFER_SIZE);
 						printf("%s", buffer);
 						break;
 					case 'h':
+						// if \h appears, print host name
 						gethostname(buffer, BUFFER_SIZE);
 						printf("%s", buffer);
 						break;
@@ -190,11 +219,17 @@ void printPrompt()
 				printf("%c", promptEnvironment[i]);
 		}
 		printf(" ");
-		fflush(NULL);
 	}
+
+	fflush(NULL);	
 }
 
-int runBuiltInCommand(char **command)
+int runBuiltinCommand(char **command)
+/*
+ *	try run (char **)command as builtin command.
+ *	if successful, return TRUE,
+ *	if failed, return FALSE
+ */
 {
 	if( strcmp(command[0], "cd") == 0)
 	{
@@ -208,7 +243,20 @@ int runBuiltInCommand(char **command)
 	}
 	else if( strcmp(command[0], "export") == 0)
 	{
-		if( putenv(command[1]) != 0)
+		char *name, *value;
+		name = strtok(command[1], "=");
+		value = strtok(NULL, "=");
+
+		if(name == NULL || value == NULL)
+		{
+			printError("set environment variable failed");
+			return TRUE;
+		}
+
+		if(DEBUG)
+			printf("name %s, value %s\n", name, value);
+
+		if( setenv(name, value, TRUE) != 0)
 			printError("set environment variable failed");
 	}
 	else if( strcmp(command[0], "echo") == 0)

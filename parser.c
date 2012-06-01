@@ -19,6 +19,8 @@ int parseInput( char	*input,
 	char buffer[BUFFER_SIZE];
 	char *tokenPointer;
 	int argumentsCount = 0;
+	int inputRedirectionOccurrence = 0;
+	int outputRedirectionOccurrence = 0;
 
 	tokenPointer = strtok(input, " ");
 	while(tokenPointer != NULL)
@@ -27,6 +29,11 @@ int parseInput( char	*input,
 
 		if( strcmp(buffer, "<") == 0)
 		{
+			// input redirection can only appear once
+			if(inputRedirectionOccurrence >= 1)
+				return -1;
+			inputRedirectionOccurrence++;
+
 			tokenPointer = strtok(NULL, " ");
 			if(tokenPointer == NULL)
 				return -1;
@@ -40,6 +47,11 @@ int parseInput( char	*input,
 
 		if( strcmp(buffer, ">") == 0)
 		{
+			// output redirection can only appear once
+			if(outputRedirectionOccurrence >= 1)
+				return -1;
+			outputRedirectionOccurrence++;
+
 			tokenPointer = strtok(NULL, " ");
 			if(tokenPointer == NULL)
 				return -1;
@@ -54,8 +66,10 @@ int parseInput( char	*input,
 		if( strcmp(buffer, "&") == 0)
 		{
 			tokenPointer = strtok(NULL, " ");
+
+			// there should be no more input after "&"
 			if(tokenPointer != NULL)
-				return -1;	// there should be no more input after "&"
+				return -1;	
 			else
 			{
 				*isBackground = TRUE;
